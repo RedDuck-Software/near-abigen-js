@@ -1,7 +1,7 @@
 import { NearContractAbi, NearFunctionArg, NearFunctionCall, NearFunctionType, NearFunctionView, PrimitiveType } from "lib/abi";
 import { writeFile } from "../utils";
 import path from "path";
-import { MethodDeclarationStructure, OptionalKind, Project, SourceFile, ts, Type } from "ts-morph"
+import {ClassDeclaration, MethodDeclarationStructure, OptionalKind, Project, SourceFile, ts, Type} from "ts-morph"
 
 const stringTypeToObject = <TReturn extends object = object>(strObj: string) => {
     return new Function('return ' + strObj + ';')() as TReturn;
@@ -12,10 +12,10 @@ type CallDecoratorArgs = {
     payableFunction?: boolean;
 }
 
-const parseNearFunctionCall = (file: SourceFile, methods: OptionalKind<MethodDeclarationStructure>[] | undefined): NearFunctionCall[] => {
+const parseNearFunctionCall = (file: SourceFile, methods: OptionalKind<MethodDeclarationStructure>[] | undefined, classDeclaration: ClassDeclaration): NearFunctionCall[] => {
     return methods?.map(method => {
         const fnName = method.name;
-        const fnArgs = method.parameters?.map(p => toObjectType(p.type?.toString() ?? '', file));
+        const fnArgs = classDeclaration.getMethodOrThrow(method.name).getParameters()?.map(p => toObjectType(p.getType(), file));
 
         console.log('fnArgs: ', JSON.stringify(fnArgs))
         const decorator = method.decorators?.find(d => d.name === 'call')
@@ -36,14 +36,17 @@ const parseNearFunctionCall = (file: SourceFile, methods: OptionalKind<MethodDec
 }
 
 
-const parseNearFunctionView = (file: SourceFile, methods: OptionalKind<MethodDeclarationStructure>[] | undefined): NearFunctionView[] => {
+const parseNearFunctionView = (file: SourceFile, methods: OptionalKind<MethodDeclarationStructure>[] | undefined, classDeclaration: ClassDeclaration): NearFunctionView[] => {
     return methods?.map(method => {
         const fnName = method.name;
-        const fnArgs = method.parameters?.map(p => toObjectType(p.type?.toString() ?? '', file));
+        const methodsD = classDeclaration.getMethodOrThrow(method.name);
+        const fnArgs = methodsD.getParameters()?.map(p => toObjectType(p.getType(), file));
+        const returnType = methodsD?.getReturnType();
 
         return {
             name: fnName,
-            args: fnArgs?.reduce((prev, curr) => ({ ...prev, ...curr })) ?? {}
+            args: fnArgs?.reduce((prev, curr) => ({ ...prev, ...curr })) ?? {},
+            returnType: toObjectType(returnType),
         }
     }) ?? []
 }
@@ -70,8 +73,8 @@ export const parseTsFile = async ({ tsFilePath, abisOutputPath }: { tsFilePath: 
         const viewMethods = methods?.filter(m => m.decorators?.find(d => d.name === 'view'));
         const callMethods = methods?.filter(m => m.decorators?.find(d => d.name === 'call'));
 
-        const callMethodsParsed = parseNearFunctionCall(file, callMethods);
-        const viewMethodsParsed = parseNearFunctionView(file, viewMethods);
+        const callMethodsParsed = parseNearFunctionCall(file, callMethods, classDeclaration);
+        const viewMethodsParsed = parseNearFunctionView(file, viewMethods, classDeclaration);
 
         console.log(JSON.stringify({ callMethodsParsed, viewMethodsParsed }));
 
@@ -95,7 +98,7 @@ export const parseTsFile = async ({ tsFilePath, abisOutputPath }: { tsFilePath: 
     })
 }
 
-const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFunctionArg => {
+const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFunctionArg | NearFunctionType => {
     let type: Type<ts.Type>;
 
     if (typeof _type === 'string') {
@@ -103,6 +106,16 @@ const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFun
         type = file?.getTypeAliasOrThrow(_type as string).getType();
     } else {
         type = _type
+    }
+
+    const isArray = type.isArray();
+
+    if (!type.isObject() || (isArray && !type.getArrayElementTypeOrThrow().isObject())) {
+        return {
+            isArray,
+            isOptional: false,
+            type: (isArray ? type.getArrayElementTypeOrThrow().getText() : type.getText()) as PrimitiveType,
+        }
     }
 
     const properties = type.getProperties();
@@ -118,11 +131,9 @@ const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFun
         }
 
 
-        let returnType: NearFunctionArg | PrimitiveType;
+        let returnType: NearFunctionArg | PrimitiveType | NearFunctionType;
 
         if (type.isObject()) {
-            console.log('type is object')
-
             returnType = toObjectType(type, file)
         }
         else {

@@ -1,7 +1,6 @@
 export type PrimitiveType = 'string' | 'number' | 'boolean' | 'void';
 
 export type NearFunctionType = {
-    name: string,
     isArray?: boolean,
     isOptional?: boolean,
     type: PrimitiveType | NearFunctionArg,
@@ -13,14 +12,11 @@ export type NearFunctionArg = {
 
 type NearFunctionBase = {
   name: string;
-  args: NearFunctionArg;
+  args: NearFunctionArg | NearFunctionType;
 };
 
 export type NearFunctionView = {
-  returnType?: {
-    type: NearFunctionArg;
-    isArray: boolean
-  } 
+  returnType?: NearFunctionArg | NearFunctionType
 } & NearFunctionBase;
 
 export type NearFunctionCall = {

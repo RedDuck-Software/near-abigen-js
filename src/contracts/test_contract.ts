@@ -14,7 +14,10 @@ export type SomeType = {
 @NearBindgen({})
 export class TestContract {
     @call({ privateFunction: false, payableFunction: true })
-    test_call_method({ }: SomeInnerType) {
+    test_call_method({ }: {
+        val1: string,
+        val2: number,
+    }) {
         return {
             someVal: '',
             someValNested: {
@@ -25,7 +28,7 @@ export class TestContract {
     }
 
     @view({})
-    test_view_method({  }: SomeType): string {
-        return 'some view result'
+    test_view_method({ a }: {a: string}) {
+        return;
     }
 }
