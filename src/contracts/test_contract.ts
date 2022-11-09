@@ -1,29 +1,31 @@
 import { NearBindgen, near, call, view, Vector, NearPromise, assert } from 'near-sdk-js';
 
+
+export type SomeInnerType = {
+    val1: string,
+    val2: number,
+}
+
 export type SomeType = {
-    someType: string,
-    someTypeNested: {
-        type: string,
-        typ1:number
-    }
+    someVal?: string[],
+    someValNested: SomeInnerType[]
 }
 
 @NearBindgen({})
 export class TestContract {
-    @call({privateFunction:false, payableFunction: true})
-    test_call_method({ account_id  }: { account_id : { some_nest: string[] } }) : SomeType {
+    @call({ privateFunction: false, payableFunction: true })
+    test_call_method({ }: SomeInnerType) {
         return {
-            someType: '',
-            someTypeNested:{
-                typ1: 123,
-                type: ''
+            someVal: '',
+            someValNested: {
+                val2: 123,
+                val1: ''
             }
         }
     }
 
-
     @view({})
-    test_view_method({ account_id  }: { account_id: string[] }): string {
+    test_view_method({  }: SomeType): string {
         return 'some view result'
     }
 }

@@ -14,7 +14,7 @@ program
   .action((contractsFolder, { output }) => {
     console.log({ contractsFolder, output })
 
-    return parseTsFile(contractsFolder);
+    return parseTsFile({abisOutputPath: output, tsFilePath: contractsFolder});
   });
 
 

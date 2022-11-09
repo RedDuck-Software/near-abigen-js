@@ -1,26 +1,36 @@
-import { NearContractAbi, NearFunctionArg, NearFunctionCall, NearFunctionView } from "lib/abi";
-import { MethodDeclarationStructure, OptionalKind, Project, SourceFile, ts, Type, TypeAliasDeclaration } from "ts-morph"
-// TODO: jsonrepair is temp solution. Should build
+import { NearContractAbi, NearFunctionArg, NearFunctionCall, NearFunctionType, NearFunctionView, PrimitiveType } from "lib/abi";
+import { writeFile } from "../utils";
+import path from "path";
+import { MethodDeclarationStructure, OptionalKind, Project, SourceFile, ts, Type } from "ts-morph"
 
+const stringTypeToObject = <TReturn extends object = object>(strObj: string) => {
+    return new Function('return ' + strObj + ';')() as TReturn;
+}
+
+type CallDecoratorArgs = {
+    privateFunction?: boolean;
+    payableFunction?: boolean;
+}
 
 const parseNearFunctionCall = (file: SourceFile, methods: OptionalKind<MethodDeclarationStructure>[] | undefined): NearFunctionCall[] => {
     return methods?.map(method => {
         const fnName = method.name;
-        const fnArgs = method.parameters?.map(p => toObjectType(file.getTypeAliasOrThrow('SomeType').getType()));
+        const fnArgs = method.parameters?.map(p => toObjectType(p.type?.toString() ?? '', file));
+
+        console.log('fnArgs: ', JSON.stringify(fnArgs))
+        const decorator = method.decorators?.find(d => d.name === 'call')
+
+        if (!decorator?.arguments)
+            throw 'Missing call decorator';
+
+        const decoratorObject = stringTypeToObject<CallDecoratorArgs>((decorator.arguments as string[])[0].toString() ?? '');
+
+        console.log(decoratorObject)
 
         return {
             name: fnName,
-            isPayable: false, // TODO
-            args: fnArgs?.map(arg => Object.entries(arg).reduce((prev, cur) => {
-                return [
-                    ...prev,
-                    {
-                        name: cur[0],
-                        isArray: false, // todo
-                        type: cur[1]
-                    }]
-
-            }, [] as NearFunctionArg[]))?.reduce((p, c) => ([...p, ...c]), []) ?? []
+            isPayable: Boolean(decoratorObject.payableFunction),
+            args: fnArgs?.reduce((prev, curr) => ({ ...prev, ...curr })) ?? {}
         }
     }) ?? []
 }
@@ -29,26 +39,16 @@ const parseNearFunctionCall = (file: SourceFile, methods: OptionalKind<MethodDec
 const parseNearFunctionView = (file: SourceFile, methods: OptionalKind<MethodDeclarationStructure>[] | undefined): NearFunctionView[] => {
     return methods?.map(method => {
         const fnName = method.name;
-        const fnArgs = method.parameters?.map(p => toObjectType(file.getTypeAliasOrThrow('SomeType').getType()));
+        const fnArgs = method.parameters?.map(p => toObjectType(p.type?.toString() ?? '', file));
 
         return {
             name: fnName,
-            // returnType: {}, // TODO
-            args: fnArgs?.map(arg => Object.entries(arg).reduce((prev, cur) => {
-                return [
-                    ...prev,
-                    {
-                        name: cur[0],
-                        isArray: false, // todo
-                        type: cur[1]
-                    }]
-
-            }, [] as NearFunctionArg[]))?.reduce((p, c) => ([...p, ...c]), []) ?? []
+            args: fnArgs?.reduce((prev, curr) => ({ ...prev, ...curr })) ?? {}
         }
     }) ?? []
 }
 
-export const parseTsFile = async (tsFilePath: string) => {
+export const parseTsFile = async ({ tsFilePath, abisOutputPath }: { tsFilePath: string, abisOutputPath: string }) => {
     const project = new Project({});
 
     project.addSourceFilesAtPaths(tsFilePath);
@@ -65,9 +65,7 @@ export const parseTsFile = async (tsFilePath: string) => {
         const hasNearBindgen = classStructure?.decorators?.some(({ name }) => name === "NearBindgen");
         if (!hasNearBindgen) return;
 
-        const { properties, name, methods } = classStructure;
-
-        // console.log(`Generating abis for class ${name}`, JSON.stringify(methods) );
+        const { name, methods } = classStructure;
 
         const viewMethods = methods?.filter(m => m.decorators?.find(d => d.name === 'view'));
         const callMethods = methods?.filter(m => m.decorators?.find(d => d.name === 'call'));
@@ -77,7 +75,6 @@ export const parseTsFile = async (tsFilePath: string) => {
 
         console.log(JSON.stringify({ callMethodsParsed, viewMethodsParsed }));
 
-
         const abi = {
             contractName: name,
             methods: {
@@ -86,36 +83,59 @@ export const parseTsFile = async (tsFilePath: string) => {
             }
         } as NearContractAbi
 
-        console.log('contract abi: ', JSON.stringify(abi));
+        if (contractsAbis.find(abi => abi.contractName === abi.contractName))
+            throw `Duplicated contract name: ${abi.contractName}`;
+
+        contractsAbis.push(abi);
     }
+
+    contractsAbis.forEach(abi => {
+        const abiPath = path.join(abisOutputPath, `${abi.contractName}.abi.json`);
+        writeFile(abiPath, JSON.stringify(abi, undefined, 4));
+    })
 }
 
-const toObjectType = (type: Type<ts.Type>): object => {
+const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFunctionArg => {
+    let type: Type<ts.Type>;
+
+    if (typeof _type === 'string') {
+        if (!file) throw 'file is not passed';
+        type = file?.getTypeAliasOrThrow(_type as string).getType();
+    } else {
+        type = _type
+    }
+
     const properties = type.getProperties();
 
-    // if(!properties.length){
-    //     console.log('length is 0')
-    //     return type.getName()
-    // }
+    return properties.reduce((prev, curr) => {
+        let type: Type<ts.Type> = curr.getValueDeclarationOrThrow().getType();
 
-    const t = properties.reduce((prev, curr) => {
-        const type = curr.getValueDeclarationOrThrow()?.getType();
-        // console.log('t', v.getName() ,t?.getType().isPr.getText());
+        const isArray = type.isArray();
+        const isOptional = curr.isOptional();
+
+        if (isArray) {
+            type = type.getArrayElementTypeOrThrow();
+        }
+
+        
+        let returnType: NearFunctionArg | PrimitiveType;
 
         if (type.isObject()) {
-            console.log('t is object', curr.getName())
-            return {
-                ...prev,
-                [curr.getName()]: toObjectType(type)
-            };
-        }
-        else
-            return {
-                ...prev,
-                ...{ [curr.getName()]: type.getText() }
-            };
-    }, {})
+            console.log('type is object')
 
-    // console.log(t);
-    return t;
+            returnType = toObjectType(type, file)
+        }
+        else {
+            returnType = type.getText() as PrimitiveType;
+        }
+
+        return {
+            ...prev,
+            [curr.getName()]: {
+                isArray,
+                isOptional,
+                type: returnType
+            }
+        };
+    }, {})
 }
