@@ -8,23 +8,8 @@ export type NearFunctionType = {
 }
 
 export type NearFunctionArg = {
-      [name: string]: NearFunctionType;
+    [name: string]: NearFunctionType;
 }
-
-// export type ComplexType = {
-//   [key: string]: PrimitiveType | ComplexType;
-// };
-
-// export const isPrimitive = (type: PrimitiveType | ComplexType) => {
-//   if (typeof 0 === type || typeof '' === type || typeof false === type || type === 'void') return true;
-//   return false;
-// };
-
-// export type NearFunctionArg = {
-//     name: string;
-//     isArray: boolean,
-//     type: PrimitiveType | ComplexType;
-// }
 
 type NearFunctionBase = {
   name: string;

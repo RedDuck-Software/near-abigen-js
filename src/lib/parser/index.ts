@@ -117,7 +117,7 @@ const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFun
             type = type.getArrayElementTypeOrThrow();
         }
 
-        
+
         let returnType: NearFunctionArg | PrimitiveType;
 
         if (type.isObject()) {
