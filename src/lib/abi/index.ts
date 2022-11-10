@@ -12,11 +12,11 @@ export type NearFunctionArg = {
 
 type NearFunctionBase = {
   name: string;
-  args: NearFunctionArg | NearFunctionType;
+  args: NearFunctionType;
 };
 
 export type NearFunctionView = {
-  returnType?: NearFunctionArg | NearFunctionType
+  returnType?: NearFunctionType
 } & NearFunctionBase;
 
 export type NearFunctionCall = {

@@ -78,7 +78,7 @@ const getAbisFromFile = (file: SourceFile) => {
     }).filter(abi => abi) as NearContractAbi[];
 }
 
-const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFunctionArg | NearFunctionType => {
+const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFunctionType => {
     let type: Type<ts.Type>;
 
     if (typeof _type === 'string') {
@@ -100,35 +100,41 @@ const toObjectType = (_type: string | Type<ts.Type>, file?: SourceFile): NearFun
 
     const properties = type.getProperties();
 
-    return properties.reduce((prev, curr) => {
-        let type: Type<ts.Type> = curr.getValueDeclarationOrThrow().getType();
+    return {
+        isArray,
+        type: properties.reduce((prev, curr) => {
+            let type: Type<ts.Type> = curr.getValueDeclarationOrThrow().getType();
 
-        const isArray = type.isArray();
-        const isOptional = curr.isOptional();
+            const isArray = type.isArray();
+            const isOptional = curr.isOptional();
 
-        if (isArray) {
-            type = type.getArrayElementTypeOrThrow();
-        }
-
-
-        let returnType: NearFunctionArg | PrimitiveType | NearFunctionType;
-
-        if (type.isObject()) {
-            returnType = toObjectType(type, file)
-        }
-        else {
-            returnType = type.getText() as PrimitiveType;
-        }
-
-        return {
-            ...prev,
-            [curr.getName()]: {
-                isArray,
-                isOptional,
-                type: returnType
+            if (isArray) {
+                type = type.getArrayElementTypeOrThrow();
             }
-        };
-    }, {})
+
+
+            let returnType: NearFunctionArg | PrimitiveType | NearFunctionType;
+
+            if (type.isObject()) {
+                returnType = toObjectType(type, file)
+            }
+            else {
+                returnType = type.getText() as PrimitiveType;
+            }
+
+            const name = curr.getName();
+
+            return {
+                ...prev,
+                [name]: {
+                    isArray,
+                    isOptional,
+                    type: returnType,
+                    name: name
+                }
+            };
+        }, {})
+    }
 }
 
 export const parseTsFile = async ({ tsFilesPath, abisOutputPath }: { tsFilesPath: string, abisOutputPath: string }) => {
