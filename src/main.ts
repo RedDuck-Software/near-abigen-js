@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { parseTsFile } from './lib/parser';
-import { DEFAULT_OUTPUT_ABIS_PATH } from './constants';
+import { DEFAULT_CONTRACTS_PATH, DEFAULT_OUTPUT_ABIS_PATH } from './constants';
 
 const program = new Command();
 
@@ -9,12 +9,11 @@ program.name('Near AbiGen utility').description('Near AbiGen utility').version('
 
 program
   .description('Generates Typescript entities from a given contract ABIs')
-  .arguments('<contractsFolder>')
+  .option('-c, --contracts <item>', 'contracts files blob path', DEFAULT_CONTRACTS_PATH)
   .option('-o, --output <item>', 'generated abis folder path', DEFAULT_OUTPUT_ABIS_PATH)
-  .action((contractsFolder, { output }) => {
-    console.log({ contractsFolder, output })
-
-    return parseTsFile({abisOutputPath: output, tsFilePath: contractsFolder});
+  .action(({contracts, output }) => {
+    console.log({ contracts, output })
+    return parseTsFile({abisOutputPath: output, tsFilesPath: contracts});
   });
 
 
