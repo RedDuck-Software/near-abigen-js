@@ -20,7 +20,8 @@ export type NearFunctionView = {
 } & NearFunctionBase;
 
 export type NearFunctionCall = {
-  isPayable: boolean;
+  isPayable?: boolean;
+  isPrivate?: boolean;
 } & NearFunctionBase;
 
 export type NearContractAbi = {

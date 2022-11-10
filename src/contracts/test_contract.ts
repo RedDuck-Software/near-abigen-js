@@ -13,7 +13,7 @@ export type SomeType = {
 
 @NearBindgen({})
 export class TestContract {
-    @call({ privateFunction: false, payableFunction: true })
+    @call({ payableFunction: true })
     test_call_method({ }: {
         val1: string,
         val2: number,

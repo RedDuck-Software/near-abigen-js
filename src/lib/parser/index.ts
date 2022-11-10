@@ -30,6 +30,7 @@ const parseNearFunctionCall = (file: SourceFile, methods: OptionalKind<MethodDec
         return {
             name: fnName,
             isPayable: Boolean(decoratorObject.payableFunction),
+            isPrivate: Boolean(decoratorObject.privateFunction),
             args: fnArgs?.reduce((prev, curr) => ({ ...prev, ...curr })) ?? {}
         }
     }) ?? []
@@ -76,7 +77,7 @@ export const parseTsFile = async ({ tsFilePath, abisOutputPath }: { tsFilePath: 
         const callMethodsParsed = parseNearFunctionCall(file, callMethods, classDeclaration);
         const viewMethodsParsed = parseNearFunctionView(file, viewMethods, classDeclaration);
 
-        console.log(JSON.stringify({ callMethodsParsed, viewMethodsParsed }));
+        // void | number/string | {}
 
         const abi = {
             contractName: name,
